@@ -6,7 +6,11 @@
     ],
     "doxdocgen.generic.authorName": "Roman Koch",
     "doxdocgen.generic.authorEmail": "koch.roman@gmail.com",
+    "doxdocgen.generic.useGitUserEmail": true,
+    "doxdocgen.generic.useGitUserName": true,
+    "doxdocgen.c.commentPrefix": " * ",
     "cmake.generator": "Ninja",
+    "files.autoGuessEncoding": false,
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",

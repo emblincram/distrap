@@ -1,13 +1,14 @@
 
-#include "discovery.hpp"
+#include "discovery_handshake.hpp"
 
 int main(int argc, char **argv)
 {
-    Discovery discovery("255.255.255.255", 50001, 50000);
+    const application::discovery::Handshake::Identifier port{50001, 50000};
+    application::discovery::Handshake handshake(port);
 
-    discovery.start();
+    handshake.start();
     std::cout << "start" << std::endl;
-    discovery.stop();
+    handshake.stop();
     std::cout << "stop" << std::endl;
 
     return 0;

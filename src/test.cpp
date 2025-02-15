@@ -1,5 +1,8 @@
 #include <iostream>
-#include "ip_address.hpp"
+
+#include "toolbox_ip_address.hpp"
+
+using namespace application::toolbox;
 
 void test_ip_address()
 {
