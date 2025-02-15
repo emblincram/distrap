@@ -1,45 +1,61 @@
 #include "discovery_message.hpp"
 
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 
-namespace application {
-namespace discovery {
-Message::Message(uint16_t id, uint32_t ip, uint16_t port, uint8_t stat) : identifier(id), app_ip(ip), app_port(port), status(stat) {
-}
+namespace application::discovery {
+
+Message::Message(const Payload& _payload) : payload(_payload) {}
 
 std::vector<uint8_t> Message::serialize() const {
-    std::vector<uint8_t> buffer(sizeof(identifier) + sizeof(app_ip) + sizeof(app_port) + sizeof(status));
-
+    std::vector<uint8_t> buffer(sizeof(uint16_t) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t));
     size_t offset = 0;
+
+    const uint16_t identifier = static_cast<uint16_t>(payload.identifier);
     std::memcpy(buffer.data() + offset, &identifier, sizeof(identifier));
     offset += sizeof(identifier);
-    std::memcpy(buffer.data() + offset, &app_ip, sizeof(app_ip));
-    offset += sizeof(app_ip);
-    std::memcpy(buffer.data() + offset, &app_port, sizeof(app_port));
-    offset += sizeof(app_port);
+
+    std::memcpy(buffer.data() + offset, &payload.app_ip, sizeof(payload.app_ip));
+    offset += sizeof(payload.app_ip);
+
+    std::memcpy(buffer.data() + offset, &payload.app_port, sizeof(payload.app_port));
+    offset += sizeof(payload.app_port);
+
+    const uint8_t status = static_cast<uint8_t>(payload.status);
     std::memcpy(buffer.data() + offset, &status, sizeof(status));
 
     return buffer;
 }
 
 Message Message::deserialize(const std::vector<uint8_t>& data) {
-    if (data.size() != sizeof(uint16_t) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t)) {
-        // throw std::runtime_error("Invalid binary data size");
+    constexpr size_t expected_size = sizeof(uint16_t) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t);
+
+    if (data.size() != expected_size) {
+        std::cerr << "Fehlerhafte Nachricht! Erwartete " << expected_size;
+        std::cerr << " Bytes, aber erhielt " << data.size() << " Bytes.\n";
         return Message();
     }
 
-    Message msg;
+    Message::Payload payload;
     size_t offset = 0;
-    std::memcpy(&msg.identifier, data.data() + offset, sizeof(msg.identifier));
-    offset += sizeof(msg.identifier);
-    std::memcpy(&msg.app_ip, data.data() + offset, sizeof(msg.app_ip));
-    offset += sizeof(msg.app_ip);
-    std::memcpy(&msg.app_port, data.data() + offset, sizeof(msg.app_port));
-    offset += sizeof(msg.app_port);
-    std::memcpy(&msg.status, data.data() + offset, sizeof(msg.status));
 
-    return msg;
+    uint16_t identifier;
+    std::memcpy(&identifier, data.data() + offset, sizeof(identifier));
+    offset += sizeof(identifier);
+    payload.identifier = static_cast<Type>(identifier);
+
+    std::memcpy(&payload.app_ip, data.data() + offset, sizeof(payload.app_ip));
+    offset += sizeof(payload.app_ip);
+
+    std::memcpy(&payload.app_port, data.data() + offset, sizeof(payload.app_port));
+    offset += sizeof(payload.app_port);
+
+    uint8_t status;
+    std::memcpy(&status, data.data() + offset, sizeof(status));
+    payload.status = static_cast<Status>(status);
+
+    return Message(payload);
 }
-}  // namespace discovery
-}  // namespace application
+
+}  // namespace application::discovery

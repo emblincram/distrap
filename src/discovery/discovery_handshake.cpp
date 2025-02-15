@@ -16,14 +16,12 @@
 #include "discovery_message.hpp"
 #include "toolbox_ip_address.hpp"
 
-namespace application {
-namespace discovery {
-Handshake::Handshake(const Identifier& _port) : broadcastAddress(broadcastAddr), port(_port), running(false), sock(-1) {
-}
+namespace application::discovery {
 
-Handshake::~Handshake() {
-    stop();
-}
+Handshake::Handshake(const Identifier& _port, transport::PacketInterface& _transport)
+    : port(_port), transport(_transport), broadcastAddress(broadcastAddr), running(false), sock(-1) {}
+
+Handshake::~Handshake() { stop(); }
 
 void Handshake::start() {
     // UDP-Socket erstellen
@@ -83,19 +81,24 @@ void Handshake::receive_loop() {
 
             try {
                 Message receivedMsg = Message::deserialize(buffer);
-                std::cout << "Empfangen von " << inet_ntoa(recvAddr.sin_addr) << " | ID: " << receivedMsg.identifier
-                          << " | IP: " << inet_ntoa(*(struct in_addr*)&receivedMsg.app_ip) << " | Port: " << receivedMsg.app_port
-                          << " | Status: " << static_cast<int>(receivedMsg.status) << std::endl;
+                const Message::Payload& payload = receivedMsg.payload;
 
-                if (receivedMsg.identifier == 1) {
+                std::cout << "Empfangen von " << inet_ntoa(recvAddr.sin_addr);
+                std::cout << " | ID: " << static_cast<int>(payload.identifier);
+                std::cout << " | IP: " << inet_ntoa(*(struct in_addr*)&payload.app_ip);
+                std::cout << " | Port: " << payload.app_port;
+                std::cout << " | Status: " << static_cast<int>(payload.status) << std::endl;
+
+                if (payload.identifier == Message::Type::REQUEST) {
                     hasReceivedRequest = true;
 
-                    Message ackMsg(2, receivedMsg.app_ip, receivedMsg.app_port, 1);
+                    Message ackMsg(Message::Payload{Message::Type::ACK, payload.app_ip, payload.app_port, Message::Status::SUCCESS});
                     std::vector<uint8_t> ackData = ackMsg.serialize();
 
                     sendto(sock, ackData.data(), ackData.size(), 0, (struct sockaddr*)&recvAddr, sizeof(recvAddr));
-                    std::cout << "ACK gesendet für ID: " << receivedMsg.identifier << std::endl;
-                } else if (receivedMsg.identifier == 2) {
+                    std::cout << "ACK gesendet für ID: " << static_cast<int>(payload.identifier) << std::endl;
+
+                } else if (payload.identifier == Message::Type::ACK) {
                     hasReceivedAck = true;
                     std::cout << "ACK empfangen!" << std::endl;
                 }
@@ -125,18 +128,19 @@ void Handshake::send_broadcast() {
     }
 
     const uint32_t own_ip = get_own_ip();
-    Message message(1, own_ip, port.own, 0);  // DISCOVERY_REQUEST
+    Message message(Message::Payload{Message::Type::REQUEST, own_ip, port.own, Message::Status::SUCCESS});
     std::vector<uint8_t> messageData = message.serialize();
 
     for (int i = 0; i < 10 && running; ++i) {
-        // Nachricht senden
-        ssize_t sentBytes =
-            sendto(sock, messageData.data(), messageData.size(), 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr));
+        ssize_t sentBytes = sendto(sock, messageData.data(), messageData.size(), 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr));
 
         if (sentBytes < 0) {
             std::cerr << "Fehler beim Senden des Broadcasts: " << strerror(errno) << std::endl;
         } else {
-            std::cout << "Broadcast gesendet (" << i + 1 << "/10)" << std::endl;
+            std::cout << "Broadcast gesendet (" << i + 1 << "/10)";
+            std::cout << " an " << broadcastAddress;
+            std::cout << " auf Port " << port.peer;
+            std::cout << std::endl;
         }
 
         // **Falls ACK erhalten, aber noch keine Anfrage, weiter senden**
@@ -154,20 +158,22 @@ void Handshake::send_broadcast() {
     }
 }
 
-bool Handshake::wait_for_ack(const uint16_t message_id) {
+bool Handshake::wait_for_ack(const Message::Type _message_type) {
     struct sockaddr_in recvAddr{};
     socklen_t addrLen = sizeof(recvAddr);
     std::vector<uint8_t> buffer(1024);
 
     // Warte maximal 3 Sekunden auf ein ACK
     auto start_time = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - start_time < std::chrono::seconds(3)) {
+    while (std::chrono::steady_clock::now() - start_time < std::chrono::seconds(HANDSHAKE_TIMEOUT_SEC)) {
         ssize_t recvLen = recvfrom(sock, buffer.data(), buffer.size(), MSG_DONTWAIT, (struct sockaddr*)&recvAddr, &addrLen);
         if (recvLen > 0) {
             buffer.resize(recvLen);
             try {
                 Message response = Message::deserialize(buffer);
-                if (response.identifier == 2 && response.identifier == message_id) {
+                const Message::Payload& payload = response.payload;
+
+                if (payload.identifier == Message::Type::ACK && _message_type == Message::Type::REQUEST) {
                     std::cout << "ACK erhalten von " << inet_ntoa(recvAddr.sin_addr) << std::endl;
                     return true;
                 }
@@ -175,11 +181,12 @@ bool Handshake::wait_for_ack(const uint16_t message_id) {
                 std::cerr << "Fehler bei der Deserialisierung: " << e.what() << std::endl;
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Warten
+        std::this_thread::sleep_for(std::chrono::milliseconds(HANDSHAKE_REQUEST_DELAY_MS));
     }
 
+    // Kein ACK erhalten
     std::cout << "Kein ACK erhalten, erneut senden..." << std::endl;
-    return false;  // Kein ACK erhalten
+    return false;
 }
 
 uint32_t Handshake::get_own_ip() {
@@ -200,6 +207,12 @@ uint32_t Handshake::get_own_ip() {
         if (family == AF_INET) {
             // Nur IPv4
             struct sockaddr_in* addr = (struct sockaddr_in*)ifa->ifa_addr;
+
+            // Lokale Adressen (127.0.0.1) ignorieren
+            if ((ntohl(addr->sin_addr.s_addr) & 0xFF000000) == 0x7F000000) {
+                continue;
+            }
+
             ip_binary = addr->sin_addr.s_addr;  // Bereits in Netzwerkreihenfolge
             break;                              // Erste gültige IP nehmen
         }
@@ -209,5 +222,4 @@ uint32_t Handshake::get_own_ip() {
     return ip_binary;
 }
 
-}  // namespace discovery
-}  // namespace application
+}  // namespace application::discovery

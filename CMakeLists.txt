@@ -11,6 +11,7 @@ set(SOURCES
     ${SRC_DIR}/toolbox/toolbox_ip_address.cpp
     ${SRC_DIR}/discovery/discovery_message.cpp
     ${SRC_DIR}/discovery/discovery_handshake.cpp
+    ${SRC_DIR}/transport/transport_packet.cpp
     ${SRC_DIR}/application_a.cpp
     ${SRC_DIR}/application_b.cpp
     ${SRC_DIR}/data_record.cpp
@@ -22,6 +23,8 @@ set(HEADERS
     ${SRC_DIR}/toolbox/toolbox_ip_address.hpp
     ${SRC_DIR}/discovery/discovery_message.hpp    
     ${SRC_DIR}/discovery/discovery_handshake.hpp
+    ${SRC_DIR}/transport/transport_interface.hpp
+    ${SRC_DIR}/transport/transport_packet.hpp
     ${SRC_DIR}/application_a.hpp
     ${SRC_DIR}/application_b.hpp
     ${SRC_DIR}/data_record.hpp
@@ -33,6 +36,7 @@ set(INCLUDE_DIRS
     ${SRC_DIR}
     ${SRC_DIR}/toolbox
     ${SRC_DIR}/discovery
+    ${SRC_DIR}/transport
 )
 
 add_executable(test ${SRC_DIR}/test.cpp ${SOURCES} ${HEADERS})

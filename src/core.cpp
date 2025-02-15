@@ -1,9 +1,10 @@
 #include "discovery_handshake.hpp"
+#include "transport_packet.hpp"
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     const application::discovery::Handshake::Identifier port{50000, 50001};
-    application::discovery::Handshake handshake(port);
+    application::transport::Packet packet(port.own);
+    application::discovery::Handshake handshake(port, packet);
 
     handshake.start();
     std::cout << "start" << std::endl;
