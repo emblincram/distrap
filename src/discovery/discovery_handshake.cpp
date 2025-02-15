@@ -19,41 +19,12 @@
 
 namespace application::discovery {
 
-Handshake::Handshake(const Identifier& _port, transport::PacketInterface& _transport)
-    : port(_port), transport(_transport), /*broadcastAddress(broadcastAddr),*/ running(false) /*, sock(-1)*/ {}
+Handshake::Handshake(transport::PacketInterface& _transport, Identifier& _identifier) : transport(_transport), identifier(_identifier), running(false) {}
 
-Handshake::~Handshake() { stop(); }
+Handshake::~Handshake() {}
 
 void Handshake::start() {
-    /*
-    // UDP-Socket erstellen
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        std::cerr << "Fehler beim Erstellen des Sockets: " << strerror(errno) << std::endl;
-        return;
-    }
-
-    int reuseEnable = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseEnable, sizeof(reuseEnable)) < 0) {
-        std::cerr << "Fehler beim Aktivieren von SO_REUSEADDR: " << strerror(errno) << std::endl;
-        close(sock);
-        return;
-    }
-
-    // Empfangs-Socket vorbereiten
-    struct sockaddr_in localAddr{};
-    localAddr.sin_family = AF_INET;
-    localAddr.sin_port = htons(port.own);
-    localAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(sock, (struct sockaddr*)&localAddr, sizeof(localAddr)) < 0) {
-        std::cerr << "Fehler beim Binden des Sockets: " << strerror(errno) << " (Port: " << port.own << ")" << std::endl;
-        close(sock);
-        return;
-    }
-    std::cout << "Socket erfolgreich gebunden auf Port " << port.own << std::endl;
-    */
-
+    identifier.ip.own = get_own_ip();
     running = true;
     recvThread = std::thread(&Handshake::receive_loop, this);
     send_broadcast();
@@ -61,168 +32,104 @@ void Handshake::start() {
 
 void Handshake::stop() {
     running = false;
+
+    Message quit_msg(Message::Payload{Message::Type::UNDEFINED, identifier.ip.own, identifier.port.own, Message::Status::UNKNOWN});
+    transport.send(quit_msg.serialize(), identifier.ip.own, identifier.port.own);
+
     if (recvThread.joinable()) {
         recvThread.join();
     }
-    /*
-    if (sock >= 0) {
-        close(sock);
-        sock = -1;
-    }
-    */
 }
 
 void Handshake::receive_loop() {
-    /*
-    struct sockaddr_in recvAddr{};
-    socklen_t addrLen = sizeof(recvAddr);
-    std::vector<uint8_t> buffer(1024);
-
-    std::cout << "Warte auf Nachrichten..." << std::endl;
-    */
+    auto start_time = std::chrono::steady_clock::now();
 
     while (running) {
         uint32_t sender_ip;
         uint16_t sender_port;
 
-        /*
-        ssize_t recvLen = recvfrom(sock, buffer.data(), buffer.size(), 0, (struct sockaddr*)&recvAddr, &addrLen);
-        */
         auto data = transport.receive(sender_ip, sender_port);
-        // if (recvLen > 0) {
-        if (!data.empty() > 0) {
-            // buffer.resize(recvLen);
+        if (!data.empty()) {
             try {
-                // Message receivedMsg = Message::deserialize(buffer);
                 Message receivedMsg = Message::deserialize(data);
                 const Message::Payload& payload = receivedMsg.payload;
 
-                std::cout << "Empfangen von " << /*inet_ntoa(recvAddr.sin_addr)*/ inet_ntoa(*(struct in_addr*)&sender_ip);
-                std::cout << " | ID: " << static_cast<int>(payload.identifier);
+                std::cout << "handshake: recv " << inet_ntoa(*(struct in_addr*)&sender_ip) << ":" << sender_port;
+                std::cout << " [ ID: " << static_cast<int>(payload.identifier);
                 std::cout << " | IP: " << inet_ntoa(*(struct in_addr*)&payload.app_ip);
-                std::cout << " | Port: " << payload.app_port;
-                std::cout << " | Status: " << static_cast<int>(payload.status) << std::endl;
+                std::cout << " | PORT: " << payload.app_port;
+                std::cout << " | STATUS " << static_cast<int>(payload.status) << " ]" << std::endl;
 
                 if (payload.identifier == Message::Type::REQUEST) {
-                    hasReceivedRequest = true;
+                    if (payload.app_port == identifier.port.peer && sender_port == identifier.port.peer) {
+                        hasReceivedRequest = true;
 
-                    Message ackMsg(Message::Payload{Message::Type::ACK, payload.app_ip, payload.app_port, Message::Status::SUCCESS});
-                    std::vector<uint8_t> ackData = ackMsg.serialize();
+                        // store sender ip address
+                        identifier.ip.peer = sender_ip;
 
-                    /*
-                    sendto(sock, ackData.data(), ackData.size(), 0, (struct sockaddr*)&recvAddr, sizeof(recvAddr));
-                    */
-                    transport.send(ackData, sender_ip, sender_port);
-                    std::cout << "ACK gesendet für ID: " << static_cast<int>(payload.identifier) << std::endl;
+                        Message ackMsg(Message::Payload{Message::Type::ACK, payload.app_ip, payload.app_port, Message::Status::SUCCESS});
+                        std::vector<uint8_t> ackData = ackMsg.serialize();
+
+                        std::cout << "handshake: send ACK " << inet_ntoa(*(struct in_addr*)&sender_ip) << ":" << sender_port << std::endl;
+                        transport.send(ackData, sender_ip, sender_port);
+                    }
 
                 } else if (payload.identifier == Message::Type::ACK) {
-                    hasReceivedAck = true;
-                    std::cout << "ACK empfangen!" << std::endl;
+                    if (payload.app_ip == identifier.ip.own && payload.app_port == identifier.port.own &&
+                        sender_port == identifier.port.peer) {  // Prüfe, ob ACK für uns ist
+                        hasReceivedAck = true;
+                        std::cout << "handshake: recv ACK." << std::endl;
+                    }
                 }
 
                 if (hasReceivedRequest && hasReceivedAck) {
-                    std::cout << "Handshake erfolgreich!" << std::endl;
+                    std::cout << "handshake: success." << std::endl;
                     running = false;
+                    break;
                 }
             } catch (const std::exception& e) {
                 std::cerr << "Fehler bei der Deserialisierung: " << e.what() << std::endl;
             }
         }
+
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count();
+        if (elapsed_time > HANDSHAKE_TIMEOUT_SEC) {
+            std::cout << "handshake: timeout after" << HANDSHAKE_TIMEOUT_SEC << " sec." << std::endl;
+            running = false;
+            return;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(HANDSHAKE_REQUEST_DELAY_MS));
     }
 }
 
 void Handshake::send_broadcast() {
-    /*
-    struct sockaddr_in broadcastAddr{};
-    broadcastAddr.sin_family = AF_INET;
-    broadcastAddr.sin_port = htons(port.peer);
-    broadcastAddr.sin_addr.s_addr = inet_addr(broadcastAddress.c_str());
-
-    // SO_BROADCAST setzen (für sendto())
-    int broadcastEnable = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0) {
-        std::cerr << "Fehler beim Aktivieren von SO_BROADCAST: " << strerror(errno) << std::endl;
-        return;
-    }
-    */
-
     const uint32_t own_ip = get_own_ip();
-    Message message(Message::Payload{Message::Type::REQUEST, own_ip, port.own, Message::Status::SUCCESS});
-    std::vector<uint8_t> messageData = message.serialize();
+    try {
+        Message message(Message::Payload{Message::Type::REQUEST, own_ip, identifier.port.own, Message::Status::SUCCESS});
+        std::vector<uint8_t> messageData = message.serialize();
 
-    for (int i = 0; i < 10 && running; ++i) {
-        /*
-        ssize_t sentBytes = sendto(sock, messageData.data(), messageData.size(), 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr));
-        */
-        transport.send(messageData, INADDR_BROADCAST, port.peer);
-        if (wait_for_ack(Message::Type::REQUEST))
-            return;
+        for (int i = 0; i < HANDSHAKE_NUMBER_OF_REQUESTS && running; ++i) {
+            std::cout << "handshake: send broadcast " << i + 1 << "/" << HANDSHAKE_NUMBER_OF_REQUESTS;
+            std::cout << " 255.255.255.255:" << identifier.port.peer;
+            std::cout << " [ ID: " << static_cast<int>(message.payload.identifier);
+            std::cout << " | IP: " << inet_ntoa(*(struct in_addr*)&message.payload.app_ip);
+            std::cout << " | PORT: " << message.payload.app_port;
+            std::cout << " | STATUS " << static_cast<int>(message.payload.status) << " ]" << std::endl;
 
-        /*
-        if (sentBytes < 0) {
-            std::cerr << "Fehler beim Senden des Broadcasts: " << strerror(errno) << std::endl;
-        } else {
-            std::cout << "Broadcast gesendet (" << i + 1 << "/10)";
-            std::cout << " an " << broadcastAddress;
-            std::cout << " auf Port " << port.peer;
-            std::cout << std::endl;
-        }
+            transport.send(messageData, INADDR_BROADCAST, identifier.port.peer);
 
-        // **Falls ACK erhalten, aber noch keine Anfrage, weiter senden**
-        if (hasReceivedAck && !hasReceivedRequest) {
-            std::cout << "ACK erhalten, warte auf DISCOVERY_REQUEST..." << std::endl;
-        }
-
-        // **Falls beide Bedingungen erfüllt sind, abbrechen**
-        if (hasReceivedAck && hasReceivedRequest) {
-            std::cout << "Beide Seiten bestätigt. Beenden!" << std::endl;
-            return;
-        }
-        */
-
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    }
-}
-
-bool Handshake::wait_for_ack(const Message::Type _message_type) {
-    /*
-    struct sockaddr_in recvAddr{};
-    socklen_t addrLen = sizeof(recvAddr);
-    std::vector<uint8_t> buffer(1024);
-    */
-
-    uint32_t sender_ip;
-    uint16_t sender_port;
-
-    // Warte maximal 3 Sekunden auf ein ACK
-    auto start_time = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - start_time < std::chrono::seconds(HANDSHAKE_TIMEOUT_SEC)) {
-        /*
-        ssize_t recvLen = recvfrom(sock, buffer.data(), buffer.size(), MSG_DONTWAIT, (struct sockaddr*)&recvAddr, &addrLen);
-        */
-        auto data = transport.receive(sender_ip, sender_port);
-        // if (recvLen > 0) {
-        // buffer.resize(recvLen);
-        if (!data.empty() > 0) {
-            try {
-                // Message response = Message::deserialize(buffer);
-                Message response = Message::deserialize(data);
-                const Message::Payload& payload = response.payload;
-
-                if (payload.identifier == Message::Type::ACK && _message_type == Message::Type::REQUEST) {
-                    std::cout << "ACK erhalten von " << /*inet_ntoa(recvAddr.sin_addr) << */ std::endl;
-                    return true;
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Fehler bei der Deserialisierung: " << e.what() << std::endl;
+            if (hasReceivedAck) {
+                std::cout << "handshake: send broadcast done." << std::endl;
+                running = false;
+                return;
             }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(HANDSHAKE_REQUEST_DELAY_MS));
-    }
 
-    // Kein ACK erhalten
-    std::cout << "Kein ACK erhalten, erneut senden..." << std::endl;
-    return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(HANDSHAKE_TIMEOUT_SEC * 1000 / HANDSHAKE_NUMBER_OF_REQUESTS));
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Fehler bei der Serialisierung: " << e.what() << std::endl;
+    }
 }
 
 uint32_t Handshake::get_own_ip() {

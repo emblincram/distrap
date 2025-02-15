@@ -18,9 +18,8 @@ class Packet : public PacketInterface {
     bool send(const std::vector<uint8_t>& data, uint32_t ip, uint16_t port) override;
     std::vector<uint8_t> receive(uint32_t& sender_ip, uint16_t& sender_port) override;
 
-    int sock;
-
    private:
+    int sock;
 };
 
 }  // namespace application::transport

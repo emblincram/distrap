@@ -11,7 +11,8 @@ class Message {
    public:
     enum class Type : uint16_t {
         REQUEST = 1,
-        ACK = 2
+        ACK = 2,
+        UNDEFINED = 0xff
     };
 
     enum class Status : uint8_t {

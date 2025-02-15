@@ -19,6 +19,13 @@ Packet::Packet(uint16_t _local_port) {
         return;
     }
 
+    int broadcastEnable = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0) {
+        std::cerr << "Fehler beim Aktivieren von SO_BROADCAST: " << strerror(errno) << std::endl;
+        close(sock);
+        return;
+    }
+
     // Empfangs-Socket vorbereiten
     struct sockaddr_in localAddr{};
     localAddr.sin_family = AF_INET;
@@ -51,6 +58,14 @@ bool Packet::send(const std::vector<uint8_t>& data, uint32_t _ip, uint16_t _port
 
     ssize_t sentBytes = sendto(sock, data.data(), data.size(), 0, (struct sockaddr*)&destAddr, sizeof(destAddr));
 
+    if (sentBytes > 0) {
+        if (_ip == INADDR_BROADCAST) {
+            std::cout << "transport: send broarcast 255.255.255.255:" << _port << std::endl;
+        } else {
+            std::cout << "transport: send unicast " << inet_ntoa(*(struct in_addr*)&_ip) << ":" << _port << std::endl;
+        }
+    }
+
     return sentBytes > 0;
 }
 
@@ -67,6 +82,13 @@ std::vector<uint8_t> Packet::receive(uint32_t& _sender_ip, uint16_t& _sender_por
         buffer.resize(recvLen);
         _sender_ip = senderAddr.sin_addr.s_addr;
         _sender_port = ntohs(senderAddr.sin_port);
+
+        if (_sender_ip == INADDR_BROADCAST) {
+            std::cout << "transport: recv broadcast 255.255.255.255:" << _sender_port << std::endl;
+        } else {
+            std::cout << "transport: recv broadcast " << inet_ntoa(senderAddr.sin_addr) << ":" << _sender_port << std::endl;
+        }
+
         return buffer;
     }
     return {};
