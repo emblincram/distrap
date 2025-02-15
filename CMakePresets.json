@@ -2,7 +2,7 @@
     "version": 8,
     "configurePresets": [
         {
-            "name": "GCC-13.3.0-x86_64-linux-gnu",
+            "name": "linux",
             "displayName": "GCC-13.3.0-x86_64-linux-gnu",
             "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
             "binaryDir": "${sourceDir}/build/${presetName}",
@@ -12,6 +12,40 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_BUILD_TYPE": "Debug"
             }
+        },
+        {
+            "name": "yocto",
+            "displayName": "Yocto Cross-Compile",
+            "description": "Using Yocto SDK cross-compiler",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "toolchainFile": "${sourceDir}/cmake/yocto-toolchain.cmake",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/${presetName}",
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "GCC-13.3.0-x86_64-linux-gnu",
+            "configurePreset": "GCC-13.3.0-x86_64-linux-gnu",
+            "jobs": 4
+        },
+        {
+            "name": "yocto-cross-compile",
+            "configurePreset": "yocto-cross-compile",
+            "jobs": 4
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "GCC-13.3.0-x86_64-linux-gnu",
+            "configurePreset": "GCC-13.3.0-x86_64-linux-gnu"
+        },
+        {
+            "name": "yocto-cross-compile",
+            "configurePreset": "yocto-cross-compile"
         }
     ]
 }
