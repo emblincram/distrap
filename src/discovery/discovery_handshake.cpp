@@ -1,3 +1,4 @@
+
 #include "discovery_handshake.hpp"
 
 #include <arpa/inet.h>
@@ -19,11 +20,12 @@
 namespace application::discovery {
 
 Handshake::Handshake(const Identifier& _port, transport::PacketInterface& _transport)
-    : port(_port), transport(_transport), broadcastAddress(broadcastAddr), running(false), sock(-1) {}
+    : port(_port), transport(_transport), /*broadcastAddress(broadcastAddr),*/ running(false) /*, sock(-1)*/ {}
 
 Handshake::~Handshake() { stop(); }
 
 void Handshake::start() {
+    /*
     // UDP-Socket erstellen
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
@@ -50,6 +52,7 @@ void Handshake::start() {
         return;
     }
     std::cout << "Socket erfolgreich gebunden auf Port " << port.own << std::endl;
+    */
 
     running = true;
     recvThread = std::thread(&Handshake::receive_loop, this);
@@ -61,29 +64,40 @@ void Handshake::stop() {
     if (recvThread.joinable()) {
         recvThread.join();
     }
+    /*
     if (sock >= 0) {
         close(sock);
         sock = -1;
     }
+    */
 }
 
 void Handshake::receive_loop() {
+    /*
     struct sockaddr_in recvAddr{};
     socklen_t addrLen = sizeof(recvAddr);
     std::vector<uint8_t> buffer(1024);
 
     std::cout << "Warte auf Nachrichten..." << std::endl;
+    */
 
     while (running) {
-        ssize_t recvLen = recvfrom(sock, buffer.data(), buffer.size(), 0, (struct sockaddr*)&recvAddr, &addrLen);
-        if (recvLen > 0) {
-            buffer.resize(recvLen);
+        uint32_t sender_ip;
+        uint16_t sender_port;
 
+        /*
+        ssize_t recvLen = recvfrom(sock, buffer.data(), buffer.size(), 0, (struct sockaddr*)&recvAddr, &addrLen);
+        */
+        auto data = transport.receive(sender_ip, sender_port);
+        // if (recvLen > 0) {
+        if (!data.empty() > 0) {
+            // buffer.resize(recvLen);
             try {
-                Message receivedMsg = Message::deserialize(buffer);
+                // Message receivedMsg = Message::deserialize(buffer);
+                Message receivedMsg = Message::deserialize(data);
                 const Message::Payload& payload = receivedMsg.payload;
 
-                std::cout << "Empfangen von " << inet_ntoa(recvAddr.sin_addr);
+                std::cout << "Empfangen von " << /*inet_ntoa(recvAddr.sin_addr)*/ inet_ntoa(*(struct in_addr*)&sender_ip);
                 std::cout << " | ID: " << static_cast<int>(payload.identifier);
                 std::cout << " | IP: " << inet_ntoa(*(struct in_addr*)&payload.app_ip);
                 std::cout << " | Port: " << payload.app_port;
@@ -95,7 +109,10 @@ void Handshake::receive_loop() {
                     Message ackMsg(Message::Payload{Message::Type::ACK, payload.app_ip, payload.app_port, Message::Status::SUCCESS});
                     std::vector<uint8_t> ackData = ackMsg.serialize();
 
+                    /*
                     sendto(sock, ackData.data(), ackData.size(), 0, (struct sockaddr*)&recvAddr, sizeof(recvAddr));
+                    */
+                    transport.send(ackData, sender_ip, sender_port);
                     std::cout << "ACK gesendet für ID: " << static_cast<int>(payload.identifier) << std::endl;
 
                 } else if (payload.identifier == Message::Type::ACK) {
@@ -115,6 +132,7 @@ void Handshake::receive_loop() {
 }
 
 void Handshake::send_broadcast() {
+    /*
     struct sockaddr_in broadcastAddr{};
     broadcastAddr.sin_family = AF_INET;
     broadcastAddr.sin_port = htons(port.peer);
@@ -126,14 +144,21 @@ void Handshake::send_broadcast() {
         std::cerr << "Fehler beim Aktivieren von SO_BROADCAST: " << strerror(errno) << std::endl;
         return;
     }
+    */
 
     const uint32_t own_ip = get_own_ip();
     Message message(Message::Payload{Message::Type::REQUEST, own_ip, port.own, Message::Status::SUCCESS});
     std::vector<uint8_t> messageData = message.serialize();
 
     for (int i = 0; i < 10 && running; ++i) {
+        /*
         ssize_t sentBytes = sendto(sock, messageData.data(), messageData.size(), 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr));
+        */
+        transport.send(messageData, INADDR_BROADCAST, port.peer);
+        if (wait_for_ack(Message::Type::REQUEST))
+            return;
 
+        /*
         if (sentBytes < 0) {
             std::cerr << "Fehler beim Senden des Broadcasts: " << strerror(errno) << std::endl;
         } else {
@@ -153,28 +178,39 @@ void Handshake::send_broadcast() {
             std::cout << "Beide Seiten bestätigt. Beenden!" << std::endl;
             return;
         }
+        */
 
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 
 bool Handshake::wait_for_ack(const Message::Type _message_type) {
+    /*
     struct sockaddr_in recvAddr{};
     socklen_t addrLen = sizeof(recvAddr);
     std::vector<uint8_t> buffer(1024);
+    */
+
+    uint32_t sender_ip;
+    uint16_t sender_port;
 
     // Warte maximal 3 Sekunden auf ein ACK
     auto start_time = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() - start_time < std::chrono::seconds(HANDSHAKE_TIMEOUT_SEC)) {
+        /*
         ssize_t recvLen = recvfrom(sock, buffer.data(), buffer.size(), MSG_DONTWAIT, (struct sockaddr*)&recvAddr, &addrLen);
-        if (recvLen > 0) {
-            buffer.resize(recvLen);
+        */
+        auto data = transport.receive(sender_ip, sender_port);
+        // if (recvLen > 0) {
+        // buffer.resize(recvLen);
+        if (!data.empty() > 0) {
             try {
-                Message response = Message::deserialize(buffer);
+                // Message response = Message::deserialize(buffer);
+                Message response = Message::deserialize(data);
                 const Message::Payload& payload = response.payload;
 
                 if (payload.identifier == Message::Type::ACK && _message_type == Message::Type::REQUEST) {
-                    std::cout << "ACK erhalten von " << inet_ntoa(recvAddr.sin_addr) << std::endl;
+                    std::cout << "ACK erhalten von " << /*inet_ntoa(recvAddr.sin_addr) << */ std::endl;
                     return true;
                 }
             } catch (const std::exception& e) {

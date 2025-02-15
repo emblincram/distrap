@@ -3,7 +3,7 @@
 #include "transport_packet.hpp"
 
 int main(int argc, char **argv) {
-    const application::discovery::Handshake::Identifier port{50001, 50000};
+    const application::discovery::Handshake::Identifier port{50011, 50010};
     application::transport::Packet packet(port.own);
     application::discovery::Handshake handshake(port, packet);
 

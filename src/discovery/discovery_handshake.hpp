@@ -31,7 +31,7 @@ class Handshake {
    private:
     const int64_t HANDSHAKE_TIMEOUT_SEC{3};
     const int64_t HANDSHAKE_REQUEST_DELAY_MS{200};
-    const std::string broadcastAddr{"255.255.255.255"};
+    // const std::string broadcastAddr{"255.255.255.255"};
 
     const Identifier& port;
     transport::PacketInterface& transport;
@@ -44,8 +44,8 @@ class Handshake {
     bool hasReceivedRequest = false;
     bool hasReceivedAck = false;
 
-    std::string broadcastAddress;
-    int sock;
+    // std::string broadcastAddress;
+    // int sock;
     std::atomic<bool> running;
     std::thread recvThread;
 };
