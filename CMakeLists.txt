@@ -48,3 +48,8 @@ target_include_directories(core PRIVATE ${INCLUDE_DIRS})
 add_executable(shell ${SRC_DIR}/shell.cpp ${SOURCES} ${HEADERS})
 target_include_directories(shell PRIVATE ${INCLUDE_DIRS})
 
+install(TARGETS test core shell
+    RUNTIME DESTINATION bin
+    #LIBRARY DESTINATION lib
+    #ARCHIVE DESTINATION lib
+)

@@ -28,24 +28,24 @@
     ],
     "buildPresets": [
         {
-            "name": "GCC-13.3.0-x86_64-linux-gnu",
-            "configurePreset": "GCC-13.3.0-x86_64-linux-gnu",
+            "name": "linux",
+            "configurePreset": "linux",
             "jobs": 4
         },
         {
-            "name": "yocto-cross-compile",
-            "configurePreset": "yocto-cross-compile",
+            "name": "yocto",
+            "configurePreset": "yocto",
             "jobs": 4
         }
     ],
     "testPresets": [
         {
-            "name": "GCC-13.3.0-x86_64-linux-gnu",
-            "configurePreset": "GCC-13.3.0-x86_64-linux-gnu"
+            "name": "linux",
+            "configurePreset": "linux"
         },
         {
-            "name": "yocto-cross-compile",
-            "configurePreset": "yocto-cross-compile"
+            "name": "yocto",
+            "configurePreset": "yocto"
         }
     ]
 }
