@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# SPDX-License-Identifier: MIT
+# SPDX-Author: Roman Koch <koch.romam@gmail.com>
+# SPDX-Copyright: 2024 Roman Koch <koch.romam@gmail.com>
+
 BIN_DIR="build/yocto/"
 DEVICE="192.168.0.146"
 FILES=("dacore" "dashell" "datest")

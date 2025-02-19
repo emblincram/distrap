@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "dashell-yocto",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/yocto/dashell",
+      "miDebuggerPath": "../bbb-sdk/sysroots/x86_64-pokysdk-linux/usr/bin/aarch64-poky-linux-gdb",
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "setupCommands": [
+        { "text": "set sysroot ../bbb-sdk/sysroots/aarch64-poky-linux" },
+        { "text": "target remote 192.168.0.146:1234" }
+      ],
+      "logging": {
+        "trace": true,
+        "traceResponse": true
+      },
+      "targetArchitecture": "arm",      
+      "pipeTransport": {
+        "pipeCwd": "",
+        "pipeProgram": "ssh",
+        "pipeArgs": [
+          "-o", "StrictHostKeyChecking=no",
+          "-o", "UserKnownHostsFile=/dev/null",
+          "root@192.168.0.146", 
+          "/usr/bin/gdbserver",
+          ":1234", 
+          "/usr/bin/dashell"
+        ],
+        "debuggerPath": "",
+      },
+      "sourceFileMap": {
+        "/usr/src/yocto": "${workspaceFolder}/src"
+      }
+    }
+  ]
+}

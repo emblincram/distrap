@@ -1,6 +1,10 @@
+# SPDX-License-Identifier: MIT
+# SPDX-Author: Roman Koch <koch.romam@gmail.com>
+# SPDX-Copyright: 2024 Roman Koch <koch.romam@gmail.com>
+
 cmake_minimum_required(VERSION 3.10)
 
-project(disp_app)
+project(da)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -29,18 +33,18 @@ set(INCLUDE_DIRS
     ${SRC_DIR}/transport
 )
 
-add_executable(datest ${SRC_DIR}/test.cpp ${SOURCES} ${HEADERS})
-target_include_directories(datest PRIVATE ${INCLUDE_DIRS})
+add_executable(${PROJECT_NAME}test ${SRC_DIR}/test.cpp ${SOURCES} ${HEADERS})
+target_include_directories(${PROJECT_NAME}test PRIVATE ${INCLUDE_DIRS})
 
-add_executable(dacore ${SRC_DIR}/core.cpp ${SOURCES} ${HEADERS})
-target_include_directories(dacore PRIVATE ${INCLUDE_DIRS})
+add_executable(${PROJECT_NAME}core ${SRC_DIR}/core.cpp ${SOURCES} ${HEADERS})
+target_include_directories(${PROJECT_NAME}core PRIVATE ${INCLUDE_DIRS})
 
-add_executable(dashell ${SRC_DIR}/shell.cpp ${SOURCES} ${HEADERS})
-target_include_directories(dashell PRIVATE ${INCLUDE_DIRS})
+add_executable(${PROJECT_NAME}shell ${SRC_DIR}/shell.cpp ${SOURCES} ${HEADERS})
+target_include_directories(${PROJECT_NAME}shell PRIVATE ${INCLUDE_DIRS})
 
 set(CMAKE_INSTALL_PREFIX "/usr")
 
-install(TARGETS datest dacore dashell
+install(TARGETS ${PROJECT_NAME}test ${PROJECT_NAME}core ${PROJECT_NAME}shell
     RUNTIME DESTINATION bin
     #LIBRARY DESTINATION lib
     #ARCHIVE DESTINATION lib
