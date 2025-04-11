@@ -163,6 +163,11 @@ uint32_t Handshake::get_own_ip() {
                 continue;
             }
 
+            // Prüfen, ob die IP-Adresse mit 172.16. beginnt --> fürs erste zum testen
+            if ((ntohl(addr->sin_addr.s_addr) & 0xFFFF0000) != 0xAC100000) {  // 172.16.0.0/16
+                continue;
+            }
+
             ip_binary = addr->sin_addr.s_addr;  // Bereits in Netzwerkreihenfolge
             break;                              // Erste gültige IP nehmen
         }
